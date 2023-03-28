@@ -1,46 +1,26 @@
 use std::convert::TryFrom;
-use std::fs::{File, OpenOptions};
-use std::io::prelude::*;
+use std::fs::File;
 use std::io::{Error, Result};
 use std::mem::MaybeUninit;
-use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
-use std::path::Path;
+use std::os::windows::prelude::RawHandle;
 
 use winapi::shared::minwindef::*;
 use winapi::um::fileapi::*;
 use winapi::um::minwinbase::OVERLAPPED;
-use winapi::um::winbase::FILE_FLAG_NO_BUFFERING;
 
-//todo:
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct FileId(u64);
-
-impl FileId {
-    pub fn file_size(file: &File) -> Result<(FileId, u64)> {
-        let mut info = MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::zeroed();
-        check_err(unsafe { GetFileInformationByHandle(file.as_raw_handle(), info.as_mut_ptr()) })?;
-        let info = unsafe { info.assume_init() };
-        let id = Self(u64::from(info.nFileIndexHigh) << 32 | u64::from(info.nFileIndexLow));
-        let len = u64::from(info.nFileSizeHigh) << 32 | u64::from(info.nFileSizeLow);
-        Ok((id, len))
-    }
+pub fn fd(file: &File) -> usize {
+    file.as_raw_handle() as usize
 }
 
-pub fn open(path: impl AsRef<Path>, options: &OpenOptions) -> Result<File> {
-    let mut options = options.clone();
-    options.custom_flags(FILE_FLAG_NO_BUFFERING);
-    options.open(path)
-}
-
-pub fn read_at(file: &File, pos: u64, buf: &mut [u8]) -> Result<usize> {
+pub fn pread(raw_handle: usize, pos: u64, len: usize, buf_ptr: u64) -> Result<usize> {
     let mut bytes: DWORD = 0;
     let mut ov = overlapped(pos);
     check_err(unsafe {
         ReadFile(
-            file.as_raw_handle(),
-            buf.as_mut_ptr() as LPVOID,
-            DWORD::try_from(buf.len()).unwrap(),
+            raw_handle as RawHandle,
+            buf_ptr as LPVOID,
+            DWORD::try_from(len).unwrap(),
             &mut bytes,
             &mut ov,
         )
@@ -48,19 +28,27 @@ pub fn read_at(file: &File, pos: u64, buf: &mut [u8]) -> Result<usize> {
     Ok(usize::try_from(bytes).unwrap())
 }
 
-pub fn write_at(file: &File, pos: u64, buf: &[u8]) -> Result<usize> {
+pub fn pwrite(raw_handle: usize, pos: u64, len: usize, buf_ptr: u64) -> Result<usize> {
     let mut bytes: DWORD = 0;
     let mut ov = overlapped(pos);
     check_err(unsafe {
-        ReadFile(
-            file.as_raw_handle(),
-            buf.as_ptr() as LPVOID,
-            DWORD::try_from(buf.len()).unwrap(),
+        WriteFile(
+            raw_handle as RawHandle,
+            buf_ptr as LPVOID,
+            DWORD::try_from(len).unwrap(),
             &mut bytes,
             &mut ov,
         )
     })?;
     Ok(bytes as usize)
+}
+
+pub fn file_size(raw_handle: usize) -> Result<u64> {
+    let mut info = MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::zeroed();
+    check_err(unsafe { GetFileInformationByHandle(raw_handle as RawHandle, info.as_mut_ptr()) })?;
+    let info = unsafe { info.assume_init() };
+    let len = u64::from(info.nFileSizeHigh) << 32 | u64::from(info.nFileSizeLow);
+    Ok(len)
 }
 
 fn overlapped(pos: u64) -> OVERLAPPED {

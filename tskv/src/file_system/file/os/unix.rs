@@ -3,52 +3,20 @@ use std::io::{Error, Result};
 use std::mem::MaybeUninit;
 use std::os::unix::io::{AsRawFd, RawFd};
 
-#[cfg(not(target_os = "macos"))]
-pub use not_macos::*;
-
-#[cfg(not(target_os = "macos"))]
-mod not_macos {
-    use std::fs::OpenOptions;
-    use std::path::Path;
-
-    use super::*;
-
-    pub fn open(path: impl AsRef<Path>, options: OpenOptions) -> Result<File> {
-        //let mut options = options.clone();
-        // options.custom_flags(libc::O_DIRECT);
-        options.open(path)
-    }
+pub fn fd(file: &File) -> usize {
+    file.as_raw_fd() as usize
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct FileId {
-    pub dev: libc::dev_t,
-    pub inode: libc::ino_t,
+pub fn pread(raw_fd: usize, pos: u64, len: usize, ptr: u64) -> Result<usize> {
+    check_err_size(unsafe {
+        libc::pread(raw_fd as RawFd, ptr as *mut _, len as _, pos as libc::off_t)
+    })
 }
 
-impl FileId {
-    pub fn file_size(file: &File) -> Result<(FileId, u64)> {
-        let mut stat = MaybeUninit::<libc::stat>::zeroed();
-        check_err(unsafe { libc::fstat(file.as_raw_fd(), stat.as_mut_ptr()) })?;
-        let stat = unsafe { stat.assume_init() };
-        let id = Self {
-            dev: stat.st_dev,
-            inode: stat.st_ino,
-        };
-        assert!(stat.st_size >= 0);
-        let len = stat.st_size as u64;
-        Ok((id, len))
-    }
-}
-
-pub fn pread(file: RawFd, pos: u64, len: usize, ptr: u64) -> Result<usize> {
-    check_err_size(unsafe { libc::pread(file, ptr as *mut _, len as _, pos as libc::off_t) })
-}
-
-pub fn pwrite(file: RawFd, pos: u64, len: usize, ptr: u64) -> Result<usize> {
+pub fn pwrite(raw_fd: usize, pos: u64, len: usize, ptr: u64) -> Result<usize> {
     check_err_size(unsafe {
         libc::pwrite(
-            file,
+            raw_fd as RawFd,
             ptr as *const _,
             len as libc::size_t,
             pos as libc::off_t,
@@ -56,7 +24,14 @@ pub fn pwrite(file: RawFd, pos: u64, len: usize, ptr: u64) -> Result<usize> {
     })
 }
 
-pub fn check_err(r: libc::c_int) -> Result<libc::c_int> {
+pub fn file_size(raw_fd: usize) -> Result<u64> {
+    let mut stat = MaybeUninit::<libc::stat>::zeroed();
+    check_err(unsafe { libc::fstat(raw_fd as RawFd, stat.as_mut_ptr()) })?;
+    let stat = unsafe { stat.assume_init() };
+    Ok(stat.st_size as u64)
+}
+
+fn check_err(r: libc::c_int) -> Result<libc::c_int> {
     if r == -1 {
         Err(Error::last_os_error())
     } else {

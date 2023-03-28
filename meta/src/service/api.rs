@@ -139,9 +139,18 @@ pub async fn debug(app: Data<MetaApp>) -> actix_web::Result<impl Responder> {
 
 #[get("/debug/pprof")]
 pub async fn cpu_pprof(_app: Data<MetaApp>) -> actix_web::Result<impl Responder> {
-    match utils::pprof_tools::gernate_pprof().await {
-        Ok(v) => Ok(v),
-        Err(v) => Ok(v),
+    #[cfg(unix)]
+    {
+        match utils::pprof_tools::gernate_pprof().await {
+            Ok(v) => Ok(v),
+            Err(v) => Ok(v),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        actix_web::Result::<String>::Err(actix_web::error::ErrorNotFound(
+            "/debug/pprof only supported on *unix systems.",
+        ))
     }
 }
 
