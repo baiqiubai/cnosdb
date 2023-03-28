@@ -29,11 +29,11 @@ pub struct Deployment {
 
 impl Deployment {
     pub fn cpu_or_default(&self) -> usize {
-        self.cpu.unwrap_or(4)
+        self.cpu.unwrap_or(get_sys_cpu())
     }
 
     pub fn memory_or_default(&self) -> usize {
-        self.memory.unwrap_or(16)
+        self.memory.unwrap_or(get_sys_mem())
     }
 }
 
@@ -88,4 +88,22 @@ impl SetDeployment for Deployment {
     fn set_memory(&mut self, memory: usize) {
         self.memory = Some(memory)
     }
+}
+
+fn get_sys_cpu() -> usize {
+    let mut num_cpus: usize = 4;
+    if let Ok(cpu_info) = sys_info::cpu_num() {
+        num_cpus = cpu_info as usize;
+    }
+
+    num_cpus
+}
+
+fn get_sys_mem() -> usize {
+    let mut mem: usize = 16 * 1024 * 1024;
+    if let Ok(mem_info) = sys_info::mem_info() {
+        mem = mem_info.total as usize;
+    }
+
+    mem / 1024 / 1024
 }
