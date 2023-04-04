@@ -512,6 +512,10 @@ impl StateMachine {
 
             WriteCommand::AddDataNode(cluster, node) => self.process_add_date_node(cluster, node),
 
+            WriteCommand::ChangeNodeState(cluster, node_id, node_state) => {
+                self.change_node_state(cluster, node_id, node_state)
+            }
+
             WriteCommand::CreateDB(cluster, tenant, schema) => {
                 self.process_create_db(cluster, tenant, schema)
             }
@@ -657,7 +661,7 @@ impl StateMachine {
         }
     }
 
-    fn process_add_date_node(&self, cluster: &str, node: &NodeInfo) -> CommandResp {
+    fn common_function(&self, cluster: &str, node: &NodeInfo) -> CommandResp {
         self.check_node_ip_address(cluster, node);
         let key = KeyPath::data_node_id(cluster, node.id);
         let value = serde_json::to_string(node).unwrap();
@@ -665,6 +669,37 @@ impl StateMachine {
         info!("WRITE: {} :{}", key, value);
 
         serde_json::to_string(&StatusResponse::default()).unwrap()
+    }
+
+    fn process_add_date_node(&self, cluster: &str, node: &NodeInfo) -> CommandResp {
+        self.common_function(cluster, node)
+    }
+
+    fn change_node_state(&self, cluster: &str, node_id: &u64, node_state: &str) -> CommandResp {
+        let mut status = StatusResponse::new(META_REQUEST_FAILED, "".to_string());
+
+        if NodeState::from(node_state.to_owned()) == NodeState::Unknown {
+            status.msg = "Unknown Node State".to_string();
+            return serde_json::to_string(&status).unwrap();
+        }
+
+        for value in
+            children_data::<NodeInfo>(&KeyPath::data_nodes(cluster), self.db.clone()).values()
+        {
+            if value.id == *node_id {
+                let node = NodeInfo {
+                    id: *node_id,
+                    grpc_addr: value.grpc_addr.clone(),
+                    http_addr: value.http_addr.clone(),
+                    disk_free: value.disk_free,
+                    status: NodeState::from(node_state.to_owned()),
+                };
+                return self.common_function(cluster, &node);
+            }
+        }
+
+        status.msg = format!("not found node {}", *node_id);
+        serde_json::to_string(&status).unwrap()
     }
 
     fn process_drop_db(&self, cluster: &str, tenant: &str, db_name: &str) -> CommandResp {
@@ -898,7 +933,7 @@ impl StateMachine {
                 .collect();
 
         let mut hot_node_list = node_list.clone();
-        hot_node_list.retain(|node_info| !node_info.is_cold);
+        hot_node_list.retain(|node_info| node_info.status != NodeState::Cold);
 
         if node_list.is_empty()
             || db_schema.config.shard_num_or_default() == 0

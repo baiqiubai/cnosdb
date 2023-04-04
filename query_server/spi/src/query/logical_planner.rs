@@ -1,8 +1,10 @@
+use std::fmt::{Display, Formatter, Result as SysResult};
 use std::io::Write;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use config::TenantLimiterConfig;
+use coordinator::NodeState as OtherNodeState;
 use datafusion::arrow::array::ArrayRef;
 use datafusion::arrow::datatypes::DataType;
 use datafusion::datasource::file_format::file_type::{FileCompressionType, FileType};
@@ -26,6 +28,7 @@ use models::meta_data::{NodeId, ReplicationSetId, VnodeId};
 use models::object_reference::ResolvedTable;
 use models::oid::{Identifier, Oid};
 use models::schema::{DatabaseOptions, TableColumn, Tenant, TenantOptions, TenantOptionsBuilder};
+use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
 use tempfile::NamedTempFile;
 
@@ -129,12 +132,62 @@ pub enum DDLPlan {
 
     CompactVnode(CompactVnode),
 
+    ChangeNodeState(ChangeNodeState),
+
     ChecksumGroup(ChecksumGroup),
 }
 
 #[derive(Debug, Clone)]
 pub struct ChecksumGroup {
     pub replication_set_id: ReplicationSetId,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
+pub enum NodeState {
+    Pending,
+    Running,
+    Cold,
+    #[default]
+    Unknown,
+}
+
+impl Display for NodeState {
+    fn fmt(&self, f: &mut Formatter) -> SysResult {
+        match self {
+            NodeState::Running => write!(f, "Running"),
+            NodeState::Pending => write!(f, "Pending"),
+            NodeState::Cold => write!(f, "Cold"),
+            NodeState::Unknown => write!(f, "Unknown state"),
+        }
+    }
+}
+
+impl From<String> for NodeState {
+    fn from(node_state: String) -> Self {
+        match node_state.as_str() {
+            "Running" => NodeState::Running,
+            "Pending" => NodeState::Pending,
+            "Cold" => NodeState::Cold,
+            _ => NodeState::Unknown,
+        }
+    }
+}
+
+impl From<NodeState> for OtherNodeState {
+    fn from(value: NodeState) -> Self {
+        match value {
+            NodeState::Cold => OtherNodeState::Cold,
+            NodeState::Running => OtherNodeState::Running,
+            NodeState::Pending => OtherNodeState::Pending,
+            NodeState::Unknown => OtherNodeState::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ChangeNodeState {
+    pub node_id: NodeId,
+    pub node_state: NodeState,
 }
 
 #[derive(Debug, Clone)]

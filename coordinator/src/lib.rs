@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter, Result};
 
 use meta::model::{MetaClientRef, MetaRef};
 use models::consistency_level::ConsistencyLevel;
@@ -13,6 +13,7 @@ pub mod errors;
 pub mod file_info;
 pub mod hh_queue;
 pub mod metrics;
+pub mod node_mgr;
 pub mod reader;
 pub mod service;
 pub mod service_mock;
@@ -28,6 +29,41 @@ pub struct WriteRequest {
     pub tenant: String,
     pub level: models::consistency_level::ConsistencyLevel,
     pub request: protos::kv_service::WritePointsRequest,
+}
+
+#[derive(Debug, Clone)]
+pub enum NodeState {
+    Pending,
+    Running,
+    Cold,
+    Unknown,
+}
+
+impl Display for NodeState {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            NodeState::Running => write!(f, "Running"),
+            NodeState::Pending => write!(f, "Pending"),
+            NodeState::Cold => write!(f, "Cold"),
+            NodeState::Unknown => write!(f, "Unknown state"),
+        }
+    }
+}
+
+impl From<String> for NodeState {
+    fn from(node_state: String) -> Self {
+        match node_state.as_str() {
+            "Running" => NodeState::Running,
+            "Pending" => NodeState::Pending,
+            "Cold" => NodeState::Cold,
+            _ => NodeState::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum NodeManagerCmdType {
+    ChangeNodeState(u64, NodeState),
 }
 
 #[derive(Debug, Clone)]
@@ -78,5 +114,11 @@ pub trait Coordinator: Send + Sync + Debug {
         &self,
         tenant: &str,
         cmd_type: VnodeManagerCmdType,
+    ) -> CoordinatorResult<()>;
+
+    async fn node_manager(
+        &self,
+        tenant: &str,
+        cmd_type: NodeManagerCmdType,
     ) -> CoordinatorResult<()>;
 }

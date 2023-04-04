@@ -82,13 +82,10 @@ impl AdminMeta for RemoteAdminMeta {
             Err(e) => info!("{}", e),
         }
 
-        let is_cold_server = self.config.cold_data_server;
-
         let node = NodeInfo {
-            status: 0,
+            status: NodeState::Running,
             id: self.config.node_id,
             disk_free: disk_free_,
-            is_cold: is_cold_server,
             grpc_addr: self.config.grpc_listen_addr.clone(),
             http_addr: self.config.http_listen_addr.clone(),
         };

@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{self, Display, Formatter, Result};
 
 use datafusion::sql::parser::CreateExternalTable;
 use datafusion::sql::sqlparser::ast::{
@@ -8,9 +8,11 @@ use datafusion::sql::sqlparser::ast::{
 use datafusion::sql::sqlparser::parser::ParserError;
 use models::codec::Encoding;
 use models::meta_data::{NodeId, ReplicationSetId, VnodeId};
+use serde::{Deserialize, Serialize};
 
-use super::logical_planner::{DatabaseObjectType, GlobalObjectType, TenantObjectType};
-
+use super::logical_planner::{
+    DatabaseObjectType, GlobalObjectType, NodeState as OtherNodeState, TenantObjectType,
+};
 /// Statement representations
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExtStatement {
@@ -58,11 +60,61 @@ pub enum ExtStatement {
     MoveVnode(MoveVnode),
     CompactVnode(CompactVnode),
     ChecksumGroup(ChecksumGroup),
+
+    //node cmd
+    ChangeNodeState(ChangeNodeState),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChecksumGroup {
     pub replication_set_id: ReplicationSetId,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
+pub enum NodeState {
+    Pending,
+    Running,
+    Cold,
+    #[default]
+    Unknown,
+}
+
+impl Display for NodeState {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            NodeState::Running => write!(f, "Running"),
+            NodeState::Pending => write!(f, "Pending"),
+            NodeState::Cold => write!(f, "Cold"),
+            NodeState::Unknown => write!(f, "Unknown state"),
+        }
+    }
+}
+
+impl From<String> for NodeState {
+    fn from(node_state: String) -> Self {
+        match node_state.as_str() {
+            "Running" => NodeState::Running,
+            "Pending" => NodeState::Pending,
+            "Cold" => NodeState::Cold,
+            _ => NodeState::Unknown,
+        }
+    }
+}
+
+impl From<NodeState> for OtherNodeState {
+    fn from(value: NodeState) -> Self {
+        match value {
+            NodeState::Cold => OtherNodeState::Cold,
+            NodeState::Running => OtherNodeState::Running,
+            NodeState::Pending => OtherNodeState::Pending,
+            NodeState::Unknown => OtherNodeState::Unknown,
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangeNodeState {
+    pub node_id: NodeId,
+    pub node_state: NodeState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
