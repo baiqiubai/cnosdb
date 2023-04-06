@@ -144,10 +144,10 @@ pub struct ChecksumGroup {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
 pub enum NodeState {
-    Pending,
-    Running,
-    Cold,
     #[default]
+    Running,
+    Pending,
+    Cold,
     Unknown,
 }
 
@@ -176,9 +176,9 @@ impl From<String> for NodeState {
 impl From<NodeState> for OtherNodeState {
     fn from(value: NodeState) -> Self {
         match value {
-            NodeState::Cold => OtherNodeState::Cold,
             NodeState::Running => OtherNodeState::Running,
             NodeState::Pending => OtherNodeState::Pending,
+            NodeState::Cold => OtherNodeState::Cold,
             NodeState::Unknown => OtherNodeState::Unknown,
         }
     }

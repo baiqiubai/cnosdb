@@ -3,6 +3,7 @@ use std::fmt::{Debug, Display, Formatter, Result};
 use meta::model::{MetaClientRef, MetaRef};
 use models::consistency_level::ConsistencyLevel;
 use protos::kv_service::{AdminCommandRequest, WritePointsRequest};
+use serde::{Deserialize, Serialize};
 use tskv::query_iterator::QueryOption;
 use tskv::EngineRef;
 
@@ -31,10 +32,11 @@ pub struct WriteRequest {
     pub request: protos::kv_service::WritePointsRequest,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 pub enum NodeState {
-    Pending,
+    #[default]
     Running,
+    Pending,
     Cold,
     Unknown,
 }

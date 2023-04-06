@@ -39,9 +39,9 @@ pub struct UserInfo {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
 pub enum NodeState {
     Pending,
+    #[default]
     Running,
     Cold,
-    #[default]
     Unknown,
 }
 

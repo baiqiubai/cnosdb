@@ -72,10 +72,10 @@ pub struct ChecksumGroup {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 pub enum NodeState {
-    Pending,
-    Running,
-    Cold,
     #[default]
+    Running,
+    Pending,
+    Cold,
     Unknown,
 }
 

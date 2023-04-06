@@ -2141,7 +2141,7 @@ mod tests {
                 node_id,
                 node_state,
             }) => {
-                assert_eq!(*node_id, 1001 as u64);
+                assert_eq!(*node_id, 1001_u64);
                 assert_eq!(node_state.to_string(), "Pending".to_string());
             }
             _ => panic!("failed"),
